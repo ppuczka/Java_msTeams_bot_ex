@@ -5,6 +5,7 @@ import com.microsoft.bot.builder.*;
 import com.microsoft.bot.schema.*;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
@@ -16,13 +17,12 @@ import java.util.concurrent.CompletableFuture;
 @RequiredArgsConstructor
 public class EchoBotController extends ActivityHandler {
 
+
     // Messages sent to the user.
-    private static final String WELCOMEMESSAGE =
-            "This is a simple Welcome Bot sample. This bot will introduce you "
-                    + "to welcoming and greeting users. You can say 'intro' to see the "
-                    + "introduction card. If you are running this bot in the Bot Framework "
-                    + "Emulator, press the 'Start Over' button to simulate user joining "
-                    + "a bot or a channel";
+    private static final String WELCOME_MESSAGE =
+            "This is a simple Welcome DevOps channel info Bot sample. " +
+                    "This Bot will provide information about: " +
+                    "DevOps of the Day and also about DevOps team absence";
 
     private static final String INFOMESSAGE =
             "You are seeing this message because the bot received at least one "
@@ -49,19 +49,39 @@ public class EchoBotController extends ActivityHandler {
             "It is a good practice to welcome the user and provide personal greeting. For example: Welcome %s";
 
     private final UserState userState;
+    private final ConversationReferences references;
+    private final ConversationState conversationState;
 
     @Override
     public CompletableFuture<Void> onTurn(TurnContext turnContext) {
         return super.onTurn(turnContext)
-                .thenCompose(saveResult -> userState.saveChanges(turnContext));
+                .thenCompose(saveResult -> userState.saveChanges(turnContext))
+                .thenCompose(saveResult -> conversationState.saveChanges(turnContext));
+    }
+
+    @Override
+    protected CompletableFuture<Void> onMembersAdded(List<ChannelAccount> membersAdded,
+                                                     TurnContext turnContext) {
+        return membersAdded.stream()
+                .filter(
+                        member -> !StringUtils
+                                .equals(member.getId(), turnContext.getActivity().getRecipient().getId())
+                ).map(channel -> turnContext.sendActivities(
+                        MessageFactory.text("Hi there -" + channel.getName() + ". " + WELCOME_MESSAGE),
+                        MessageFactory.text(LOCALEMESSAGE + " Current Locale is "
+                                + turnContext.getActivity().getLocale()))).collect(CompletableFutures.toFutureList())
+                .thenApply(resourceResponses -> null);
     }
 
     @Override
     protected CompletableFuture<Void> onMessageActivity(TurnContext turnContext) {
-        StatePropertyAccessor<WelcomeUserState> stateAccessor = userState.createProperty("WelcomeUserState");
-        CompletableFuture<WelcomeUserState> stateFuture = stateAccessor.get(turnContext, WelcomeUserState::new);
+        StatePropertyAccessor<ConversationData> dataAccessor = conversationState.createProperty("data");
+        CompletableFuture<ConversationData> dataFuture = dataAccessor.get(turnContext, ConversationData::new);
 
-        return stateFuture.thenApply(thisUserState -> {
+        StatePropertyAccessor<UserProfile> profileAccessor = userState.createProperty("profile");
+        CompletableFuture<UserProfile> profileFuture = profileAccessor.get(turnContext, UserProfile::new);
+
+        return dataFuture.thenApply(thisUserState -> {
             if (!thisUserState.isDidBotWelcomeUser()) {
                 thisUserState.setDidBotWelcomeUser(true);
 
@@ -79,7 +99,7 @@ public class EchoBotController extends ActivityHandler {
                         return sendIntroCard(turnContext);
 
                     default:
-                        return turnContext.sendActivity(MessageFactory.text(WELCOMEMESSAGE));
+                        return turnContext.sendActivity(MessageFactory.text(WELCOME_MESSAGE));
                 }
             }
         })
@@ -87,22 +107,16 @@ public class EchoBotController extends ActivityHandler {
 
     }
 
-
     @Override
-    protected CompletableFuture<Void> onMembersAdded(List<ChannelAccount> membersAdded,
-                                                     TurnContext turnContext) {
-        return membersAdded.stream()
-                .filter(
-                        member -> !StringUtils
-                                .equals(member.getId(), turnContext.getActivity().getRecipient().getId())
-                ).map(channel -> turnContext.sendActivities(
-                        MessageFactory.text("Hi there -" + channel.getName() + ". " + WELCOMEMESSAGE),
-                        MessageFactory.text(LOCALEMESSAGE + " Current Locale is " + turnContext.getActivity().getLocale()),
-                        MessageFactory.text(INFOMESSAGE),
-                        MessageFactory.text(PATTERNMESSAGE))).collect(CompletableFutures.toFutureList())
-                .thenApply(resourceResponses -> null);
+    protected CompletableFuture<Void> onConversationUpdateActivity(TurnContext turnContext) {
+        addConversationReference(turnContext.getActivity());
+        return super.onConversationUpdateActivity(turnContext);
     }
 
+    private void addConversationReference(Activity activity) {
+        ConversationReference conversationReference = activity.getConversationReference();
+        references.put(conversationReference.getUser().getId(), conversationReference);
+    }
 
     private CompletableFuture<ResourceResponse> sendIntroCard(TurnContext turnContext) {
         HeroCard card = new HeroCard() {{

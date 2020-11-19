@@ -5,9 +5,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class WelcomeUserState {
+public class UserProfile {
 
-    private boolean didBotWelcomeUser;
-
-
+    private String name;
 }
