@@ -91,15 +91,15 @@ public class EchoBotController extends ActivityHandler {
             } else {
                 String text = turnContext.getActivity().getText().toLowerCase();
                 switch (text) {
-                    case "hello":
-                    case "hi":
+                    case "hello", "hi" -> {
                         return turnContext.sendActivity(MessageFactory.text("You said " + text));
-                    case "intro":
-                    case "help":
+                    }
+                    case "intro", "help" -> {
                         return sendIntroCard(turnContext);
-
-                    default:
+                    }
+                    default -> {
                         return turnContext.sendActivity(MessageFactory.text(WELCOME_MESSAGE));
+                    }
                 }
             }
         })
