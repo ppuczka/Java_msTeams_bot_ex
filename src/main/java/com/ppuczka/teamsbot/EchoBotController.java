@@ -5,9 +5,11 @@ import com.microsoft.bot.builder.*;
 import com.microsoft.bot.schema.*;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.time.DayOfWeek;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -22,7 +24,8 @@ public class EchoBotController extends ActivityHandler {
     private static final String WELCOME_MESSAGE =
             "This is a simple Welcome DevOps channel info Bot sample. " +
                     "This Bot will provide information about: " +
-                    "DevOps of the Day and also about DevOps team absence";
+                    "DevOps of the Day and also about DevOps team absence" +
+                    "Type anything to get started";
 
     private static final String INFOMESSAGE =
             "You are seeing this message because the bot received at least one "
@@ -62,15 +65,16 @@ public class EchoBotController extends ActivityHandler {
     @Override
     protected CompletableFuture<Void> onMembersAdded(List<ChannelAccount> membersAdded,
                                                      TurnContext turnContext) {
+        String manOfTheDay = getManOfTheDay();
         return membersAdded.stream()
                 .filter(
                         member -> !StringUtils
                                 .equals(member.getId(), turnContext.getActivity().getRecipient().getId())
                 ).map(channel -> turnContext.sendActivities(
-                        MessageFactory.text("Hi there -" + channel.getName() + ". " + WELCOME_MESSAGE),
-                        MessageFactory.text(LOCALEMESSAGE + " Current Locale is "
-                                + turnContext.getActivity().getLocale()))).collect(CompletableFutures.toFutureList())
-                .thenApply(resourceResponses -> null);
+                        MessageFactory.text("Hi there! " + WELCOME_MESSAGE),
+                        MessageFactory.text(manOfTheDay + " is man of the day")))
+                        .collect(CompletableFutures.toFutureList())
+                        .thenApply(resourceResponses -> null);
     }
 
     @Override
@@ -81,30 +85,55 @@ public class EchoBotController extends ActivityHandler {
         StatePropertyAccessor<UserProfile> profileAccessor = userState.createProperty("profile");
         CompletableFuture<UserProfile> profileFuture = profileAccessor.get(turnContext, UserProfile::new);
 
-        return dataFuture.thenApply(thisUserState -> {
-            if (!thisUserState.isDidBotWelcomeUser()) {
-                thisUserState.setDidBotWelcomeUser(true);
+        return dataFuture.thenCombine(profileFuture, ((conversationData, userProfile) -> {
+            if (StringUtils.isEmpty(userProfile.getName())) {
+                if (conversationData.isUserPromptedForName()) {
+                    conversationData.setUserPromptedForName(false);
+                    conversationData.setDidBotWelcomeUser(true);
 
-                String userName = turnContext.getActivity().getFrom().getName();
-                return turnContext.sendActivities(MessageFactory.text(FIRST_WELCOME_ONE),
-                        MessageFactory.text(String.format(FIRST_WELCOME_TWO, userName)));
-            } else {
-                String text = turnContext.getActivity().getText().toLowerCase();
-                switch (text) {
-                    case "hello", "hi" -> {
-                        return turnContext.sendActivity(MessageFactory.text("You said " + text));
-                    }
-                    case "intro", "help" -> {
-                        return sendIntroCard(turnContext);
-                    }
-                    default -> {
-                        return turnContext.sendActivity(MessageFactory.text(WELCOME_MESSAGE));
-                    }
+                    userProfile.setName(turnContext.getActivity().getText());
+                    return turnContext.sendActivities(MessageFactory.text(FIRST_WELCOME_ONE),
+                        MessageFactory.text(String.format(FIRST_WELCOME_TWO, userProfile.getName())));
+
+               } else {
+                    conversationData.setUserPromptedForName(true);
+                    conversationData.setDidBotWelcomeUser(true);
+                    return turnContext.sendActivity(MessageFactory.text("What is your name"));
                 }
-            }
-        })
-                .thenApply(resourceResponse -> null);
+            } else {
+                conversationData.setUserPromptedForName(true);
+                conversationData.setDidBotWelcomeUser(true);
 
+                OffsetDateTime messageTimeOffset = turnContext.getActivity().getLocalTimestamp();
+                LocalDateTime localMessageTime = messageTimeOffset.toLocalDateTime();
+                conversationData.setTimestamp(localMessageTime.toString());
+                conversationData.setChannelId(turnContext.getActivity().getChannelId());
+
+                List<Activity> sendToUser = List.of(
+                        MessageFactory.text(userProfile.getName() + " sent " + turnContext.getActivity().getText()),
+                        MessageFactory.text(userProfile.getName() + " message received at " + conversationData.getTimestamp()),
+                        MessageFactory.text(userProfile.getName() + " message received from " + conversationData.getChannelId()));
+
+                return turnContext.sendActivities(sendToUser);
+            }
+        })).thenApply(response -> null);
+    }
+
+    public static String getManOfTheDay() {
+        DayOfWeek dayOfWeek = LocalDateTime.now().getDayOfWeek();
+        switch (dayOfWeek) {
+            case MONDAY:
+                return "Ewa";
+            case TUESDAY:
+                return "Tomek";
+            case WEDNESDAY:
+                return "Wojtek";
+            case THURSDAY:
+                return "Przemek";
+            case FRIDAY:
+                return "Zbyszek";
+            default: return "Invalid date";
+        }
     }
 
     @Override
