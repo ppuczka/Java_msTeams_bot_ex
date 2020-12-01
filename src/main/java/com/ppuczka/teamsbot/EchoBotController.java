@@ -3,6 +3,9 @@ package com.ppuczka.teamsbot;
 import com.codepoetics.protonpack.collectors.CompletableFutures;
 import com.microsoft.bot.builder.*;
 import com.microsoft.bot.schema.*;
+import com.microsoft.bot.schema.teams.TaskModuleAction;
+import com.ppuczka.teamsbot.modules.TaskModuleUIConstants;
+import com.ppuczka.teamsbot.modules.UISettings;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
@@ -26,6 +29,12 @@ public class EchoBotController extends ActivityHandler {
                     "This Bot will provide information about: " +
                     "DevOps of the Day and also about DevOps team absence" +
                     "Type anything to get started";
+
+    private final List<UISettings> actions = Arrays.asList(
+            TaskModuleUIConstants.ADAPTIVECARD,
+            TaskModuleUIConstants.CUSTOMFORM
+    );
+
 
 
     private final UserState userState;
@@ -69,7 +78,7 @@ public class EchoBotController extends ActivityHandler {
                     conversationData.setDidBotWelcomeUser(true);
 
                     userProfile.setName(turnContext.getActivity().getText());
-                    HeroCard introCard = createIntroCard(userProfile.getName());
+                    HeroCard introCard = createIntroCard(userProfile.getName(), turnContext);
                     return turnContext.sendActivity(MessageFactory.attachment(introCard.toAttachment()));
                 } else {
                     conversationData.setUserPromptedForName(true);
@@ -131,6 +140,8 @@ public class EchoBotController extends ActivityHandler {
         }));
 
         card.setButtons(Arrays.asList(
+
+
                 new CardAction() {{
                     setType(ActionTypes.POST_BACK);
                     setTitle("Get an overview");
@@ -160,4 +171,10 @@ public class EchoBotController extends ActivityHandler {
 
         return card;
     }
+
+    private Attachment getTaskModuleHeroCardOptions() {
+        List<CardAction> buttons = actions.stream
+    }
+
+
 }
